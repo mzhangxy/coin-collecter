@@ -157,41 +157,23 @@ async def main():
                         if not GEMINI_API_KEY:
                             print("[警告] 缺少 GEMINI_API_KEY，无法启动 AI 视觉模型。")
                         else:
-                            print("[动作] 配置 AgentConfig (尝试降级至 Flash 模型) 并实例化 AgentV 核心...")
-                            # 方案2：尝试传入模型名称参数，降级为 flash 模型以规避 pro 模型的严苛额度限制
-                            agent_config = solver.AgentConfig(
-                                GEMINI_API_KEY=GEMINI_API_KEY,
-                                MODEL_NAME="gemini-2.5-flash"  # 不同的库可能叫 GEMINI_MODEL，这里以最常见的参数名为准
-                            )
+                            print("[动作] 配置 AgentConfig 并实例化 AgentV 核心...")
+                            # 恢复标准的纯净调用方式
+                            agent_config = solver.AgentConfig(GEMINI_API_KEY=GEMINI_API_KEY)
                             challenger = solver.AgentV(agent_config=agent_config, page=page)
                             
                             print("[动作] 使用特工机械臂触发验证码复选框...")
                             await challenger.robotic_arm.click_checkbox()
                             
                             print("[等待] 正在等待 AI 模型处理图片挑战...")
+                            await challenger.wait_for_challenge()
                             
-                            # 方案3：增加完善的异常捕获与容错机制
-                            try:
-                                await challenger.wait_for_challenge()
-                                print("[状态] 验证码处理流程指令结束。")
-                                await asyncio.sleep(2)
-                            except Exception as wait_e:
-                                error_msg = str(wait_e)
-                                print(f"\n[错误] AI 处理挑战时发生异常: {error_msg}")
-                                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "RetryError" in error_msg:
-                                    print("[拦截] 触发 API 额度超限 (429) 保护机制！脚本将休眠 60 秒后直接跳过本次循环。")
-                                    await safe_screenshot(page, f"debug_429_rate_limit_loop_{i}.png")
-                                    await asyncio.sleep(60)
-                                    continue  # 跳过本轮剩余操作，直接进入下一个 i 的循环
-                                else:
-                                    print("[拦截] 发生未知 AI 异常，脚本将休眠 10 秒后跳过本次循环。")
-                                    await safe_screenshot(page, f"debug_unknown_ai_error_loop_{i}.png")
-                                    await asyncio.sleep(10)
-                                    continue
+                            print("[状态] 验证码处理流程指令结束。")
+                            await asyncio.sleep(2)
                     else:
                         print("[警告] 模块中找不到兼容的 API 方法。")
                 except Exception as e:
-                    print(f"[错误] AI 库整体执行异常: {e}")
+                    print(f"[错误] AI 库处理异常: {e}")
 
                 await safe_screenshot(page, f"debug_hcaptcha_after_click_loop_{i}.png")
             else:
