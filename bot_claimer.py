@@ -1,7 +1,6 @@
 import os
 import asyncio
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
 import hcaptcha_challenger as solver
 
 # 从 GitHub Secrets 获取环境变量
@@ -48,7 +47,8 @@ async def main():
 
         # 2. 注入凭证并获取页面对象
         page = await inject_token_and_login(context)
-        await stealth_async(page)
+        
+        # 移除了 stealth_async，依靠 launch_args 进行基础伪装
         
         print(f"[状态] 正在跳转至目标收集页面: {TARGET_URL}")
         await page.goto(TARGET_URL, wait_until="networkidle")
