@@ -53,6 +53,16 @@ async def get_working_proxy(p, proxy_list):
     print("[致命错误] 代理池中所有代理均检测失败！")
     return None
 
+async def safe_screenshot(page, path, full_page=False):
+    """
+    安全截图助手：防止因为字体或外部图片加载过慢导致截图超时，从而搞崩整个脚本。
+    限制截图最多等待 10 秒。
+    """
+    try:
+        await page.screenshot(path=path, full_page=full_page, timeout=10000)
+    except Exception as e:
+        print(f"[警告] 截图保存超时或失败 ({path})，跳过截图继续执行流程。")
+
 async def inject_token_and_login(context):
     page = await context.new_page()
     
@@ -72,7 +82,7 @@ async def inject_token_and_login(context):
         print("[状态] Token 注入完成。")
     except Exception as e:
         print(f"[错误] 注入 Token 时访问主页失败: {e}")
-        await page.screenshot(path="debug_00_inject_token_error.png")
+        await safe_screenshot(page, "debug_00_inject_token_error.png")
     return page
 
 async def main():
@@ -119,12 +129,14 @@ async def main():
         try:
             await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
             await asyncio.sleep(5)
-            await page.screenshot(path="debug_01_after_login.png", full_page=True)
         except Exception as e:
             print(f"[致命错误] 访问收集页面超时: {e}")
-            await page.screenshot(path="debug_01_timeout_error.png", full_page=True)
+            await safe_screenshot(page, "debug_01_timeout_error.png", full_page=True)
             await browser.close()
             return
+            
+        # 把正常加载后的截图移出 try-except 块，防止截图失败引发致命错误
+        await safe_screenshot(page, "debug_01_after_login.png", full_page=True)
 
         # 核心收集循环 (每日 10 次上限)
         for i in range(1, 11):
@@ -134,7 +146,7 @@ async def main():
             cooldown_count = await page.locator("text=You are on cooldown!").count()
             if cooldown_count > 0:
                 print("[中止] 检测到处于冷却时间，今日任务可能已完成。")
-                await page.screenshot(path=f"debug_cooldown_loop_{i}.png", full_page=True)
+                await safe_screenshot(page, f"debug_cooldown_loop_{i}.png", full_page=True)
                 break
 
             # 步骤 B: 检查 hCaptcha
@@ -143,7 +155,7 @@ async def main():
 
             if hcaptcha_iframe > 0:
                 print("[动作] 发现 hCaptcha，准备处理...")
-                await page.screenshot(path=f"debug_hcaptcha_before_loop_{i}.png")
+                await safe_screenshot(page, f"debug_hcaptcha_before_loop_{i}.png")
                 
                 # 模型容错与降级处理
                 try:
@@ -168,7 +180,7 @@ async def main():
                     except Exception as fallback_e:
                         print(f"[错误] 备用点击方案也失败了: {fallback_e}")
 
-                await page.screenshot(path=f"debug_hcaptcha_after_click_loop_{i}.png")
+                await safe_screenshot(page, f"debug_hcaptcha_after_click_loop_{i}.png")
             else:
                 print("[状态] 未发现 hCaptcha，尝试直接推进。")
 
@@ -181,16 +193,16 @@ async def main():
                 is_disabled = await claim_button.is_disabled()
                 if is_disabled:
                     print("[拦截] 绿色按钮处于不可点击状态！可能是 hCaptcha 被隐藏拦截了。")
-                    await page.screenshot(path=f"debug_button_disabled_loop_{i}.png")
+                    await safe_screenshot(page, f"debug_button_disabled_loop_{i}.png")
                     break
                 else:
                     print("[动作] 绿色按钮可点击，尝试点击...")
                     await claim_button.click(timeout=5000)
                     await asyncio.sleep(2)
-                    await page.screenshot(path=f"debug_after_claim_click_loop_{i}.png")
+                    await safe_screenshot(page, f"debug_after_claim_click_loop_{i}.png")
             except Exception as e:
                 print(f"[错误] 无法定位绿色按钮: {e}")
-                await page.screenshot(path=f"debug_claim_error_loop_{i}.png")
+                await safe_screenshot(page, f"debug_claim_error_loop_{i}.png")
                 break
 
             # 步骤 D: 处理可能出现的广告弹窗
@@ -204,7 +216,7 @@ async def main():
             # 步骤 E: 等待进度条
             print("[等待] 正在等待进度条 (预设 20 秒)...")
             await asyncio.sleep(20)
-            await page.screenshot(path=f"debug_after_progressbar_loop_{i}.png")
+            await safe_screenshot(page, f"debug_after_progressbar_loop_{i}.png")
 
             # 步骤 F: 确认 Success 弹窗
             try:
@@ -213,7 +225,7 @@ async def main():
                 print(f"[成功] 第 {i} 次金币收集闭环完成！")
             except Exception as e:
                 print(f"[警告] 未检测到 Success 的 OK 按钮: {e}")
-                await page.screenshot(path=f"debug_missing_ok_loop_{i}.png")
+                await safe_screenshot(page, f"debug_missing_ok_loop_{i}.png")
 
             await asyncio.sleep(3)
 
