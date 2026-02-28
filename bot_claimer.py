@@ -12,7 +12,7 @@ except ImportError:
 TARGET_URL = "https://bot-hosting.net/panel/earn"
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
 RAW_PROXIES = os.environ.get("PROXY_SERVER", "")
-# 新增：获取 Gemini API Key 以驱动 AI 视觉识别
+# 获取 Gemini API Key 以驱动 AI 视觉识别
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 def get_proxy_list():
@@ -153,37 +153,39 @@ async def main():
                 print("[动作] 发现 hCaptcha，准备处理...")
                 await safe_screenshot(page, f"debug_hcaptcha_before_loop_{i}.png")
                 
+                # 第一步：原生的完美点击，强行唤醒挑战弹窗
+                print("[动作] 使用原生 Playwright 点击复选框...")
+                try:
+                    frame = page.frame_locator("iframe[src*='hcaptcha.com']").first
+                    checkbox = frame.locator("#checkbox")
+                    await checkbox.click()
+                    print("[动作] 复选框点击指令已下达，等待挑战弹窗加载...")
+                    await asyncio.sleep(5)
+                except Exception as fallback_e:
+                    print(f"[错误] 点击复选框失败: {fallback_e}")
+
+                # 第二步：将弹窗交给 Gemini 大脑去识别拖拽
                 try:
                     if solver and hasattr(solver, 'AgentV') and hasattr(solver, 'AgentConfig'):
                         if not GEMINI_API_KEY:
-                            raise ValueError("缺少 GEMINI_API_KEY，无法启动 AI 视觉模型")
+                            print("[警告] 缺少 GEMINI_API_KEY，无法启动 AI 视觉模型。")
+                        else:
+                            print("[动作] 配置 AgentConfig 并实例化 AgentV 核心...")
+                            agent_config = solver.AgentConfig(GEMINI_API_KEY=GEMINI_API_KEY)
+                            challenger = solver.AgentV(agent_config=agent_config, page=page)
                             
-                        print("[动作] 配置 AgentConfig 并实例化 AgentV 核心...")
-                        # 明确传入 API Key
-                        agent_config = solver.AgentConfig(GEMINI_API_KEY=GEMINI_API_KEY)
-                        challenger = solver.AgentV(agent_config=agent_config, page=page)
-                        
-                        print("[动作] 尝试执行自动勾选与挑战...")
-                        await challenger.handle_checkbox()
-                        await asyncio.sleep(4)
-                        
-                        if hasattr(challenger, 'execute'):
-                            await challenger.execute()
-                            # 等待 AI 模型看图并拖拽
-                            print("[等待] 正在等待 AI 模型处理图片挑战 (预设 15 秒)...")
-                            await asyncio.sleep(15)
+                            if hasattr(challenger, 'execute'):
+                                print("[动作] 尝试执行 AI 识别与自动拖拽...")
+                                await challenger.execute()
+                                # 等待 AI 模型看图并完成鼠标拖拽
+                                print("[等待] 正在等待 AI 模型处理图片挑战 (预设 15 秒)...")
+                                await asyncio.sleep(15)
+                            else:
+                                print("[警告] 模块中找不到 execute 方法。")
                     else:
-                        raise AttributeError("模块中找不到兼容的 API 方法")
+                        print("[警告] 模块中找不到兼容的 API 方法。")
                 except Exception as e:
-                    print(f"[警告] AI 库处理异常 ({e})。启动原生 Playwright 备用方案（强行点击复选框）...")
-                    try:
-                        frame = page.frame_locator("iframe[src*='hcaptcha.com']").first
-                        checkbox = frame.locator("#checkbox")
-                        await checkbox.click()
-                        print("[动作] 备用点击指令已下达，等待挑战弹窗加载...")
-                        await asyncio.sleep(5)
-                    except Exception as fallback_e:
-                        print(f"[错误] 备用点击方案也失败了: {fallback_e}")
+                    print(f"[错误] AI 库处理异常: {e}")
 
                 await safe_screenshot(page, f"debug_hcaptcha_after_click_loop_{i}.png")
             else:
