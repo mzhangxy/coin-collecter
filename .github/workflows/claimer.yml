@@ -1,0 +1,50 @@
+name: Bot Coin Claimer
+
+on:
+  # 允许在 Actions 页面手动点击按钮触发运行
+  workflow_dispatch:
+  # 定时任务（根据您的需求修改 cron 表达式，当前为每 6 小时运行一次）
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  run-claimer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码仓库 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 配置 Python 环境 (Setup Python)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # 使用稳定的 3.10 版本
+
+      - name: 安装依赖 (Install Dependencies)
+        run: |
+          python -m pip install --upgrade pip
+          # 安装 Playwright 和刚刚替换的 NopeCHA 库
+          pip install playwright nopecha
+          # 安装 Chromium 浏览器及其底层系统依赖
+          playwright install chromium --with-deps
+
+      - name: 运行自动化脚本 (Run Script)
+        env:
+          # 从 GitHub Secrets 中读取安全变量并注入到环境中
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          NOPECHA_API_KEY: ${{ secrets.NOPECHA_API_KEY }}
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        run: |
+          python bot_claimer.py
+
+      - name: 上传调试产物 (Upload Artifacts)
+        # 无论脚本是成功还是失败，都执行此步骤以保留截图现场
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          # 收集根目录下生成的所有 png 和 html 文件
+          path: |
+            *.png
+            *.html
+          retention-days: 5 # 保存 5 天以供排查
