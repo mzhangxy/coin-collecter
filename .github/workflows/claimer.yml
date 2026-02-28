@@ -1,0 +1,45 @@
+name: Bot Coin Claimer
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  run-claimer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码仓库 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 配置 Python 环境 (Setup Python)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装依赖 (Install Dependencies)
+        run: |
+          python -m pip install --upgrade pip
+          # 将依赖替换为 2captcha-python
+          pip install playwright 2captcha-python
+          playwright install chromium --with-deps
+
+      - name: 运行自动化脚本 (Run Script)
+        env:
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          # 注入 2Captcha 的 API Key
+          TWOCAPTCHA_API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+        run: |
+          python bot_claimer.py
+
+      - name: 上传调试产物 (Upload Artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: |
+            *.png
+            *.html
+          retention-days: 5
