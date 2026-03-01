@@ -20,32 +20,32 @@ def get_proxy_list():
     return [p.strip() for p in proxies if p.strip()]
 
 async def solve_hcaptcha(page_url: str, sitekey: str, api_key: str, proxy: str = None):
-    """官方 2Captcha 库 - 最稳定打码函数"""
     solver = TwoCaptcha(api_key)
     try:
-        print(f"[2Captcha] 提交 hCaptcha 任务 → {page_url}")
+        # === 新增：自动提取 rqdata（解决 Enterprise 版）===
+        rqdata = await page.evaluate('''() => {
+            const el = document.querySelector('[data-sitekey], iframe[src*="hcaptcha"]');
+            return el ? (el.getAttribute('data-rqdata') || '') : '';
+        }''')
         
         params = {
             "sitekey": sitekey,
             "url": page_url,
-            "invisible": 0,
+            "data": rqdata if rqdata else None,
+            "enterprise": 1 if rqdata else 0,   # 关键！
         }
         
+        print(f"[2Captcha] 使用 enterprise={params['enterprise']}, rqdata={bool(rqdata)}")
+        
         if proxy:
-            print(f"[2Captcha] 使用代理打码: {proxy}")
-            result = await asyncio.to_thread(
-                solver.hcaptcha,
-                **params,
-                proxy={"type": "http", "uri": proxy}
-            )
+            result = await asyncio.to_thread(solver.hcaptcha, **params, proxy={"type": "http", "uri": proxy})
         else:
             result = await asyncio.to_thread(solver.hcaptcha, **params)
         
         token = result['code']
-        print(f"[2Captcha] ✅ Token 获取成功 (长度: {len(token)})")
         return token
     except Exception as e:
-        print(f"[2Captcha] ❌ 打码失败: {e}")
+        print(f"[2Captcha] ❌ 仍失败: {e} （建议直接换 CapSolver）")
         raise
 
 async def get_working_proxy(p, proxy_list):
