@@ -8,7 +8,7 @@ TARGET_URL = "https://bot-hosting.net/panel/earn"
 
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "").strip()
 RAW_PROXIES = os.environ.get("PROXY_SERVER", "").strip()
-CAPTCHAKINGS_API_KEY = os.environ.get("CAPTCHAKINGS_API_KEY", "").strip()  # ← 新变量
+CAPTCHAKINGS_API_KEY = os.environ.get("CAPTCHAKINGS_API_KEY", "").strip()
 
 KNOWN_HCAPTCHA_SITEKEY = "21335a07-5b97-4a79-b1e9-b197dc35017a"
 MAX_LOOPS = 40
@@ -19,11 +19,10 @@ def get_proxy_list():
     proxies = RAW_PROXIES.replace('\n', ',').split(',')
     return [p.strip() for p in proxies if p.strip()]
 
-# ====================== CaptchaKings 打码函数（2026 最稳） ======================
+# ====================== CaptchaKings 打码（2026 最稳） ======================
 async def solve_hcaptcha_captchakings(page_url: str, sitekey: str, api_key: str, proxy: str = None):
     print(f"[CaptchaKings] 提交 hCaptcha 任务 → {page_url}")
     
-    # 创建任务
     create_url = "https://api.captchakings.com/createTask"
     task = {
         "type": "HCaptchaTaskProxyless",
@@ -41,7 +40,7 @@ async def solve_hcaptcha_captchakings(page_url: str, sitekey: str, api_key: str,
         data = json.loads(resp.read().decode())
         
         if data.get("errorId") != 0:
-            raise Exception(data.get("errorDescription", data))
+            raise Exception(data.get("errorDescription", str(data)))
         
         task_id = data["taskId"]
         print(f"[CaptchaKings] 任务创建成功 TaskID: {task_id}")
@@ -49,12 +48,11 @@ async def solve_hcaptcha_captchakings(page_url: str, sitekey: str, api_key: str,
         print(f"[CaptchaKings] 创建任务失败: {e}")
         raise
     
-    # 轮询结果
     print("[CaptchaKings] 等待解决中（通常 8-25 秒）...")
     result_url = "https://api.captchakings.com/getTaskResult"
     result_payload = {"clientKey": api_key, "taskId": task_id}
     
-    for _ in range(40):  # 最长 200 秒
+    for _ in range(40):
         await asyncio.sleep(5)
         try:
             req = urllib.request.Request(result_url, data=json.dumps(result_payload).encode(), headers={'Content-Type': 'application/json'})
@@ -73,7 +71,7 @@ async def solve_hcaptcha_captchakings(page_url: str, sitekey: str, api_key: str,
     
     raise Exception("CaptchaKings 轮询超时")
 
-# ====================== 其余函数保持你之前的最优版本 ======================
+# ====================== 其他辅助函数 ======================
 async def get_working_proxy(p, proxy_list):
     print(f"[Proxy] 测试 {len(proxy_list)} 个代理...")
     for proxy in proxy_list:
@@ -168,10 +166,11 @@ async def main():
             print(f"\n=== 第 {loop_count}/{MAX_LOOPS} 次循环 ===")
             await asyncio.sleep(3)
 
-            # 关闭弹窗、检查冷却
+            # 关闭弹窗
             try: await page.locator("button:has-text('X'), .close").first.click(timeout=3000)
             except: pass
 
+            # 检查冷却状态
             try:
                 btn_text = await page.locator(".btn-success").first.inner_text(timeout=5000)
                 if any(x in btn_text.lower() for x in ["cooldown", "cool down", "wait"]):
@@ -180,8 +179,13 @@ async def main():
                     break
             except: pass
 
-            # 检测验证码
-            has_captcha = await page.locator("iframe[src*='hcaptcha'], .cf-turnstile, text=Complete the captcha").count() > 0
+            # 【已修复】验证码检测 - 拆分成独立判断
+            has_captcha = (
+                await page.locator("iframe[src*='hcaptcha.com']").count() > 0 or
+                await page.locator(".cf-turnstile").count() > 0 or
+                await page.locator("text=Complete the captcha").count() > 0
+            )
+
             if has_captcha:
                 print("[Captcha] 检测到验证码 → 启动 CaptchaKings")
                 try:
