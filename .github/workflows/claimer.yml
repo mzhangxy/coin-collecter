@@ -27,8 +27,8 @@ jobs:
       - name: 运行自动化脚本 (Run Script)
         env:
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
-          # 注入 2Captcha 的 API Key
-          TWOCAPTCHA_API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}
+          # 注入 CAPTCHAKINGS 的 API Key
+          CAPTCHAKINGS_API_KEY: ${{ secrets.CAPTCHAKINGS_API_KEY }}
           PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
         run: |
           python bot_claimer.py
